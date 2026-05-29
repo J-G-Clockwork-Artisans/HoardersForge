@@ -395,6 +395,7 @@ namespace HoardersForge
         }
 
         private static Dictionary<string, int> dynamicVoxelCache = new Dictionary<string, int>();
+        private static Dictionary<string, double> resolvedBaseUnitsCache = new Dictionary<string, double>();
 
         public static bool IsSmithedItem(CollectibleObject collObj, string path)
         {
@@ -491,29 +492,97 @@ namespace HoardersForge
 
         public static double GetFinishedToolBaseUnits(string path)
         {
+            string cleanPath = ForgeMath.GetRecipePath(path);
+            if (resolvedBaseUnitsCache.TryGetValue(cleanPath, out double cachedUnits))
+            {
+                return cachedUnits;
+            }
+
             bool hasSmithingPlus = InstanceApi?.ModLoader?.IsModEnabled("smithingplus") ?? false;
-            string metal = ExtractMetalFromPath(path);
-            int voxelCount = -1;
+            string metal = ExtractMetalFromPath(cleanPath);
+
             if (metal != null)
             {
-                voxelCount = GetRecipeVoxelCount(path, metal);
+                var system = InstanceApi?.ModLoader?.GetModSystem<RecipeRegistrySystem>();
+                var recipes = system?.SmithingRecipes;
+                if (recipes != null && recipes.Count > 0)
+                {
+                    double bestUnits = -1;
+                    foreach (var recipe in recipes)
+                    {
+                        if (recipe?.Output?.Code == null) continue;
+
+                        string recipePath = recipe.Output.Code.Path;
+                        string resolvedPath = recipePath.Replace("{metal}", metal).Replace("*", metal);
+
+                        if (resolvedPath == cleanPath)
+                        {
+                            int totalVoxels = 0;
+                            var voxels = recipe.Voxels;
+                            if (voxels != null)
+                            {
+                                int len0 = voxels.GetLength(0);
+                                int len1 = voxels.GetLength(1);
+                                int len2 = voxels.GetLength(2);
+                                for (int x = 0; x < len0; x++)
+                                {
+                                    for (int y = 0; y < len1; y++)
+                                    {
+                                        for (int z = 0; z < len2; z++)
+                                        {
+                                            if (voxels[x, y, z]) totalVoxels++;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (totalVoxels > 0)
+                            {
+                                int stackSize = recipe.Output.StackSize > 0 ? recipe.Output.StackSize : 1;
+                                double units;
+                                if (hasSmithingPlus)
+                                {
+                                    double voxelsPerItem = (double)totalVoxels / stackSize;
+                                    double rawUnits = voxelsPerItem * (100.0 / 42.0);
+                                    units = Math.Floor(rawUnits / 5.0) * 5.0;
+                                    if (units < 5.0 && rawUnits > 0) units = 5.0;
+                                }
+                                else
+                                {
+                                    int totalIngots = (totalVoxels <= 42) ? 1 : 2;
+                                    units = (totalIngots * 100.0) / stackSize;
+                                }
+
+                                if (bestUnits < 0 || units < bestUnits)
+                                {
+                                    bestUnits = units;
+                                }
+                            }
+                        }
+                    }
+
+                    if (bestUnits > 0)
+                    {
+                        resolvedBaseUnitsCache[cleanPath] = bestUnits;
+                        InstanceApi?.Logger.VerboseDebug("[HoardersForge] Resolved base units for {0}: {1}u", cleanPath, bestUnits);
+                        return bestUnits;
+                    }
+                }
             }
 
-            if (voxelCount > 0)
+            // Default Fallbacks
+            double fallback = 100.0;
+            if (cleanPath.Contains("plate") || cleanPath.Contains("longbladehead") || cleanPath.Contains("swordblade"))
             {
-                return ForgeMath.CalculateBaseUnits(voxelCount, hasSmithingPlus);
+                fallback = 200.0;
+            }
+            else if (cleanPath.Contains("arrowhead"))
+            {
+                fallback = 10.0;
             }
 
-            // Default Vanilla behavior (or fallback if recipe not found)
-            if (path.Contains("plate") || path.Contains("longbladehead") || path.Contains("swordblade"))
-            {
-                return 200.0;
-            }
-            if (path.Contains("arrowhead"))
-            {
-                return 10.0;
-            }
-            return 100.0;
+            resolvedBaseUnitsCache[cleanPath] = fallback;
+            return fallback;
         }
 
         public static double GetVanillaSmeltableUnits(ItemStack stack)
@@ -619,8 +688,9 @@ namespace HoardersForge
                         durabilityRatio = (double)remainingDurability / maxDurability;
                     }
                     double loss = HoardersForgeMod.CurrentConfig?.LossPercentage ?? 5.0;
-                    double units = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio, loss);
-                    totalUnits += units * stack.StackSize;
+                    double totalBaseUnits = baseUnits * stack.StackSize;
+                    double units = ForgeMath.CalculateDurabilityYield(totalBaseUnits, durabilityRatio, loss);
+                    totalUnits += units;
                     if (HoardersForgeMod.CurrentConfig.DebugLogging)
                     {
                         HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: tool/head {0} (size {1}) -> {2} units (durability: {3}/{4})", path, stack.StackSize, units, stack.Collectible.GetRemainingDurability(stack), maxDurability);
@@ -700,8 +770,8 @@ namespace HoardersForge
                         durabilityRatio = (double)remainingDurability / maxDurability;
                     }
                     double loss = HoardersForgeMod.CurrentConfig?.LossPercentage ?? 5.0;
-                    double stackUnits = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio, loss);
-                    units = stackUnits * stack.StackSize;
+                    double totalBaseUnits = baseUnits * stack.StackSize;
+                    units = ForgeMath.CalculateDurabilityYield(totalBaseUnits, durabilityRatio, loss);
                     if (HoardersForgeMod.CurrentConfig.DebugLogging)
                     {
                         HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks processing: tool/head {0} (size {1}) -> metal: {2}, units: {3} (durability: {4}/{5})", path, stack.StackSize, matchedMetal, units, stack.Collectible.GetRemainingDurability(stack), maxDurability);
