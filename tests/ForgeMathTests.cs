@@ -49,6 +49,8 @@ namespace HoardersForge.Tests
         [Test]
         [TestCase("pickaxe-copper", "pickaxehead-copper")]
         [TestCase("axe-tinbronze", "axehead-tinbronze")]
+        [TestCase("axe-felling-copper", "axehead-copper")]
+        [TestCase("game:axe-felling-tinbronze", "game:axehead-tinbronze")]
         [TestCase("knife-copper", "knifeblade-copper")]
         [TestCase("sword-blackbronze", "swordblade-blackbronze")]
         [TestCase("chutesection-copper", "chutesection-copper")]

@@ -66,6 +66,12 @@ namespace HoardersForge
                 return path;
             }
 
+            // Map axe-felling-copper to axehead-copper
+            if (cleanPath.StartsWith("axe-felling-"))
+            {
+                return domain + "axehead-" + cleanPath.Substring("axe-felling-".Length);
+            }
+
             // Map fully assembled tools to their smithed components
             string[] toolNames = { "pickaxe", "axe", "shovel", "hoe", "scythe", "hammer", "spear" };
             foreach (var tool in toolNames)
