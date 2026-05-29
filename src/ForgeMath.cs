@@ -73,7 +73,7 @@ namespace HoardersForge
             }
 
             // Map fully assembled tools to their smithed components
-            string[] toolNames = { "pickaxe", "axe", "shovel", "hoe", "scythe", "hammer", "spear" };
+            string[] toolNames = { "pickaxe", "prospectingpick", "axe", "shovel", "hoe", "scythe", "hammer", "spear", "cleaver" };
             foreach (var tool in toolNames)
             {
                 if (cleanPath.StartsWith(tool + "-"))
@@ -86,6 +86,12 @@ namespace HoardersForge
             if (cleanPath.StartsWith("knife-"))
             {
                 return domain + cleanPath.Replace("knife-", "knifeblade-");
+            }
+
+            // Map saw-copper -> sawblade-copper
+            if (cleanPath.StartsWith("saw-"))
+            {
+                return domain + cleanPath.Replace("saw-", "sawblade-");
             }
 
             // Map sword-copper -> swordblade-copper
