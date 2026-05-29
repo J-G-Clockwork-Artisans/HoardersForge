@@ -235,7 +235,8 @@ namespace HoardersForge
         private string ExecuteIntegrationTests(ICoreAPI api)
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("=== Hoarder's Forge - Integration Tests ===");
+            double currentLoss = CurrentConfig?.LossPercentage ?? 5.0;
+            sb.AppendLine($"=== Hoarder's Forge - Integration Tests (Loss: {currentLoss}%) ===");
 
             bool hasSmithingPlus = api.ModLoader.IsModEnabled("smithingplus");
             sb.AppendLine($"SmithingPlus Active: {hasSmithingPlus}");
@@ -264,9 +265,10 @@ namespace HoardersForge
                 bool isMeltable = props != null && props.SmeltedStack != null;
 
                 double baseUnits = GetFinishedToolBaseUnits(coll.Code.Path);
+                double expectedYield = isSmithed ? ForgeMath.CalculateDurabilityYield(baseUnits, 1.0, currentLoss) : baseUnits;
 
                 string status = (isSmithed && isMeltable) ? "PASS" : "FAIL";
-                sb.AppendLine($"[{status}] {coll.Code.Path} | Smithed: {isSmithed}, Meltable: {isMeltable} | Yield (pristine): {baseUnits}u");
+                sb.AppendLine($"[{status}] {coll.Code.Path} | Smithed: {isSmithed}, Meltable: {isMeltable} | Base: {baseUnits}u -> Expected Yield (pristine): {expectedYield}u");
             }
 
             string message = sb.ToString();
