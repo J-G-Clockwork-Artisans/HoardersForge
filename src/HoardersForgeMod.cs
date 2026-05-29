@@ -82,7 +82,16 @@ namespace HoardersForge
                         sb.AppendLine($"   -> Yield (pristine): {baseUnits} units");
                     }
 
-                    return TextCommandResult.Success(sb.ToString());
+                    string message = sb.ToString();
+                    if (args.Caller?.Player is IServerPlayer serverPlayer)
+                    {
+                        (api as ICoreServerAPI)?.SendMessage(serverPlayer, 0, message, EnumChatType.CommandSuccess);
+                    }
+                    else
+                    {
+                        api.Logger.Notification(message);
+                    }
+                    return TextCommandResult.Success(message);
                 });
         }
 
