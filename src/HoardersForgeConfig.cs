@@ -17,4 +17,14 @@ namespace HoardersForge
         [ProtoMember(2)]
         public double LossPercentage { get; set; }
     }
+
+    [ProtoContract]
+    public class OpenGuiPacket
+    {
+    }
+
+    [ProtoContract]
+    public class RunTestsPacket
+    {
+    }
 }

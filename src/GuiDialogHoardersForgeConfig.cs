@@ -38,8 +38,9 @@ namespace HoardersForge
             composer.AddStaticText("Recycling Loss:", CairoFont.WhiteSmallText(), ElementBounds.Fixed(20, 110, 200, 30).WithParent(bgBounds))
                     .AddSlider((val) => { _config.LossPercentage = val; return true; }, ElementBounds.Fixed(230, 105, 130, 30).WithParent(bgBounds), "lossSlider");
 
-            // 3. Save & Close Button
-            composer.AddButton("Save & Close", OnSaveAndClose, ElementBounds.Fixed(130, 180, 140, 35).WithParent(bgBounds));
+            // 3. Buttons (Run Tests / Save & Close)
+            composer.AddButton("Run Tests", OnRunTests, ElementBounds.Fixed(30, 180, 150, 35).WithParent(bgBounds));
+            composer.AddButton("Save & Close", OnSaveAndClose, ElementBounds.Fixed(220, 180, 150, 35).WithParent(bgBounds));
 
             composer.EndChildElements();
 
@@ -48,6 +49,13 @@ namespace HoardersForge
             composer.GetSlider("lossSlider").SetValues((int)_config.LossPercentage, 0, 100, 1, "%");
 
             SingleComposer = composer.Compose();
+        }
+
+        private bool OnRunTests()
+        {
+            // Send run tests request packet to server
+            capi.Network.GetChannel("hoardersforgeconfig").SendPacket(new RunTestsPacket());
+            return true;
         }
 
         private bool OnSaveAndClose()

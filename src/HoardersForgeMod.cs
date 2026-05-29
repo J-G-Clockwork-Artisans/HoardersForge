@@ -49,9 +49,9 @@ namespace HoardersForge
                 CurrentConfig = new HoardersForgeConfig();
                 api.StoreModConfig(CurrentConfig, "HoardersForgeConfig.json");
             }
-
-            RegisterTestCommand(api);
         }
+
+        private Vintagestory.API.Client.ICoreClientAPI capi;
 
         public override void StartServerSide(ICoreServerAPI api)
         {
@@ -60,7 +60,10 @@ namespace HoardersForge
             // Register network channel
             api.Network.RegisterChannel("hoardersforgeconfig")
                 .RegisterMessageType<ConfigSyncPacket>()
-                .SetMessageHandler<ConfigSyncPacket>((player, packet) => OnServerReceiveConfigPacket(api, player, packet));
+                .RegisterMessageType<OpenGuiPacket>()
+                .RegisterMessageType<RunTestsPacket>()
+                .SetMessageHandler<ConfigSyncPacket>((player, packet) => OnServerReceiveConfigPacket(api, player, packet))
+                .SetMessageHandler<RunTestsPacket>((player, packet) => OnServerReceiveRunTestsPacket(api, player, packet));
 
             // Sync config on join
             api.Event.PlayerJoin += (player) =>
@@ -73,20 +76,43 @@ namespace HoardersForge
                 api.Network.GetChannel("hoardersforgeconfig").SendPacket(packet, player);
             };
 
-            // Register /hoardersforge server command (as a base command)
+            // Register /hoardersforge server command with gui and test subcommands
             api.ChatCommands.Create("hoardersforge")
                 .WithDescription("Commands for Hoarder's Forge mod")
-                .RequiresPrivilege(Privilege.controlserver);
+                .RequiresPrivilege(Privilege.controlserver)
+                .BeginSubCommand("gui")
+                    .WithDescription("Open the configuration GUI dialog")
+                    .HandleWith((args) =>
+                    {
+                        if (args.Caller?.Player is IServerPlayer serverPlayer)
+                        {
+                            api.Network.GetChannel("hoardersforgeconfig").SendPacket(new OpenGuiPacket(), serverPlayer);
+                        }
+                        return TextCommandResult.Success();
+                    })
+                .EndSubCommand()
+                .BeginSubCommand("test")
+                    .WithDescription("Runs integration tests for Hoarder's Forge")
+                    .HandleWith((args) =>
+                    {
+                        string message = ExecuteIntegrationTests(api);
+                        return TextCommandResult.Success(message);
+                    })
+                .EndSubCommand();
         }
 
         public override void StartClientSide(Vintagestory.API.Client.ICoreClientAPI api)
         {
             base.StartClientSide(api);
+            this.capi = api;
 
             // Register network channel
             api.Network.RegisterChannel("hoardersforgeconfig")
                 .RegisterMessageType<ConfigSyncPacket>()
-                .SetMessageHandler<ConfigSyncPacket>(OnClientReceiveConfigPacket);
+                .RegisterMessageType<OpenGuiPacket>()
+                .RegisterMessageType<RunTestsPacket>()
+                .SetMessageHandler<ConfigSyncPacket>(OnClientReceiveConfigPacket)
+                .SetMessageHandler<OpenGuiPacket>(OnClientReceiveOpenGuiPacket);
 
             // Register hotkey Ctrl+H
             api.Input.RegisterHotKey("hoardersforgeconfiggui", "Open Hoarder's Forge Config GUI", Vintagestory.API.Client.GlKeys.H, Vintagestory.API.Client.HotkeyType.CharacterControls, ctrlPressed: true);
@@ -96,7 +122,7 @@ namespace HoardersForge
                 return true;
             });
 
-            // Register client-side /hoardersforge gui command
+            // Register client-side /hoardersforge command
             api.ChatCommands.Create("hoardersforge")
                 .WithDescription("Commands for Hoarder's Forge mod")
                 .BeginSubCommand("gui")
@@ -104,6 +130,14 @@ namespace HoardersForge
                     .HandleWith((args) =>
                     {
                         OpenConfigGui(api);
+                        return TextCommandResult.Success();
+                    })
+                .EndSubCommand()
+                .BeginSubCommand("test")
+                    .WithDescription("Runs integration tests for Hoarder's Forge")
+                    .HandleWith((args) =>
+                    {
+                        api.Network.GetChannel("hoardersforgeconfig").SendPacket(new RunTestsPacket());
                         return TextCommandResult.Success();
                     })
                 .EndSubCommand();
@@ -117,6 +151,17 @@ namespace HoardersForge
             if (CurrentConfig.DebugLogging)
             {
                 api.Logger.Notification("[HoardersForge] Configuration synced from server: Loss = {0}%, DebugLogs = {1}", CurrentConfig.LossPercentage, CurrentConfig.DebugLogging);
+            }
+        }
+
+        private void OnClientReceiveOpenGuiPacket(OpenGuiPacket packet)
+        {
+            if (capi != null)
+            {
+                capi.Event.EnqueueMainThreadTask(() =>
+                {
+                    OpenConfigGui(capi);
+                }, "openhoardersforgegui");
             }
         }
 
@@ -156,6 +201,21 @@ namespace HoardersForge
             api.Network.GetChannel("hoardersforgeconfig").BroadcastPacket(syncPacket);
         }
 
+        private void OnServerReceiveRunTestsPacket(ICoreServerAPI api, IServerPlayer player, RunTestsPacket packet)
+        {
+            if (player == null) return;
+
+            // Check privileges
+            if (!player.HasPrivilege(Privilege.controlserver))
+            {
+                api.SendMessage(player, 0, "You do not have permission to run integration tests.", EnumChatType.CommandError);
+                return;
+            }
+
+            string results = ExecuteIntegrationTests(api);
+            api.SendMessage(player, 0, results, EnumChatType.CommandSuccess);
+        }
+
         private void OpenConfigGui(Vintagestory.API.Client.ICoreClientAPI api)
         {
             if (configGui == null)
@@ -172,54 +232,46 @@ namespace HoardersForge
             }
         }
 
-        private void RegisterTestCommand(ICoreAPI api)
+        private string ExecuteIntegrationTests(ICoreAPI api)
         {
-            if (api.Side != EnumAppSide.Server) return;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("=== Hoarder's Forge - Integration Tests ===");
 
-            api.ChatCommands.Create("hoardersforgetest")
-                .WithDescription("Runs integration tests for Hoarder's Forge")
-                .RequiresPrivilege(Privilege.controlserver)
-                .HandleWith((args) =>
+            bool hasSmithingPlus = api.ModLoader.IsModEnabled("smithingplus");
+            sb.AppendLine($"SmithingPlus Active: {hasSmithingPlus}");
+
+            string[] testItems = {
+                "game:pickaxe-copper",
+                "game:chutesection-copper",
+                "game:metalnailsandstrips-copper",
+                "game:padlock-tinbronze",
+                "game:arrowhead-copper",
+                "game:metalplate-copper"
+            };
+
+            foreach (var code in testItems)
+            {
+                var assetLoc = new AssetLocation(code);
+                var coll = api.World.GetItem(assetLoc) as CollectibleObject ?? api.World.GetBlock(assetLoc) as CollectibleObject;
+                if (coll == null)
                 {
-                    var sb = new System.Text.StringBuilder();
-                    sb.AppendLine("=== Hoarder's Forge - Integration Tests ===");
+                    sb.AppendLine($"[SKIP] {code} - Not found");
+                    continue;
+                }
 
-                    bool hasSmithingPlus = api.ModLoader.IsModEnabled("smithingplus");
-                    sb.AppendLine($"SmithingPlus Active: {hasSmithingPlus}");
+                bool isSmithed = IsSmithedItem(coll, coll.Code.Path);
+                var props = coll.GetCombustibleProperties(null, null, null);
+                bool isMeltable = props != null && props.SmeltedStack != null;
 
-                    string[] testItems = {
-                        "game:pickaxe-copper",
-                        "game:chutesection-copper",
-                        "game:metalnailsandstrips-copper",
-                        "game:padlock-tinbronze",
-                        "game:arrowhead-copper",
-                        "game:metalplate-copper"
-                    };
+                double baseUnits = GetFinishedToolBaseUnits(coll.Code.Path);
 
-                    foreach (var code in testItems)
-                    {
-                        var assetLoc = new AssetLocation(code);
-                        var coll = api.World.GetItem(assetLoc) as CollectibleObject ?? api.World.GetBlock(assetLoc) as CollectibleObject;
-                        if (coll == null)
-                        {
-                            sb.AppendLine($"[SKIP] {code} - Not found");
-                            continue;
-                        }
+                string status = (isSmithed && isMeltable) ? "PASS" : "FAIL";
+                sb.AppendLine($"[{status}] {coll.Code.Path} | Smithed: {isSmithed}, Meltable: {isMeltable} | Yield (pristine): {baseUnits}u");
+            }
 
-                        bool isSmithed = IsSmithedItem(coll, coll.Code.Path);
-                        var props = coll.GetCombustibleProperties(null, null, null);
-                        bool isMeltable = props != null && props.SmeltedStack != null;
-
-                        double baseUnits = GetFinishedToolBaseUnits(coll.Code.Path);
-
-                        string status = (isSmithed && isMeltable) ? "PASS" : "FAIL";
-                        sb.AppendLine($"[{status}] {coll.Code.Path} | Smithed: {isSmithed}, Meltable: {isMeltable} | Yield (pristine): {baseUnits}u");
-                    }
-
-                    string message = sb.ToString();
-                    api.Logger.Notification("[HoardersForge] Test results:\n" + message);
-                    return TextCommandResult.Success(message);
-                });
+            string message = sb.ToString();
+            api.Logger.Notification("[HoardersForge] Test results:\n" + message);
+            return message;
         }
 
         public override void AssetsFinalize(ICoreAPI api)
