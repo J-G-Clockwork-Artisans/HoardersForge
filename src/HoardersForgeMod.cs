@@ -38,6 +38,8 @@ namespace HoardersForge
 
         private void RegisterTestCommand(ICoreAPI api)
         {
+            if (api.Side != EnumAppSide.Server) return;
+
             api.ChatCommands.Create("hoardersforgetest")
                 .WithDescription("Executa testes de integração para o Hoarder's Forge")
                 .RequiresPrivilege(Privilege.controlserver)
