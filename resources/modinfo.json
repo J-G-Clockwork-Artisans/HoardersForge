@@ -1,0 +1,16 @@
+{
+  "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
+  "type": "code",
+  "modid": "hoardersforge",
+  "name": "Hoarder's Forge",
+  "authors": ["JimmyJTC"],
+  "description": "Recycle your old tools, broken toolheads, arrowheads, and leftover metal scraps back in the crucible! Declutter your chests and recover exactly what they are worth.",
+  "version": "1.0.0",
+  "side": "Universal",
+  "requiredOnClient": true,
+  "requiredOnServer": true,
+  "dependencies": {
+    "game": "1.22.0",
+    "survival": "1.22.0"
+  }
+}
