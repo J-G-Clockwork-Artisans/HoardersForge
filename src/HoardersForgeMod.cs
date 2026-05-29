@@ -57,7 +57,7 @@ namespace HoardersForge
                         "game:metalnailsandstrips-copper",
                         "game:padlock-tinbronze",
                         "game:arrowhead-copper",
-                        "game:plate-copper"
+                        "game:metalplate-copper"
                     };
 
                     foreach (var code in testItems)
