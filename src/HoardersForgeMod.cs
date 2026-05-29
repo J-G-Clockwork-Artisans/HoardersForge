@@ -41,15 +41,15 @@ namespace HoardersForge
             if (api.Side != EnumAppSide.Server) return;
 
             api.ChatCommands.Create("hoardersforgetest")
-                .WithDescription("Executa testes de integração para o Hoarder's Forge")
+                .WithDescription("Runs integration tests for Hoarder's Forge")
                 .RequiresPrivilege(Privilege.controlserver)
                 .HandleWith((args) =>
                 {
                     var sb = new System.Text.StringBuilder();
-                    sb.AppendLine("=== Hoarder's Forge - Testes de Integração ===");
+                    sb.AppendLine("=== Hoarder's Forge - Integration Tests ===");
 
                     bool hasSmithingPlus = api.ModLoader.IsModEnabled("smithingplus");
-                    sb.AppendLine($"SmithingPlus Ativo: {hasSmithingPlus}");
+                    sb.AppendLine($"SmithingPlus Active: {hasSmithingPlus}");
 
                     string[] testItems = {
                         "game:pickaxe-copper",
@@ -66,7 +66,7 @@ namespace HoardersForge
                         var coll = api.World.GetItem(assetLoc) as CollectibleObject ?? api.World.GetBlock(assetLoc) as CollectibleObject;
                         if (coll == null)
                         {
-                            sb.AppendLine($"[SKIP] {code} - Não encontrado");
+                            sb.AppendLine($"[SKIP] {code} - Not found");
                             continue;
                         }
 
