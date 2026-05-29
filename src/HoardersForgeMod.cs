@@ -268,7 +268,7 @@ namespace HoardersForge
                 double expectedYield = isSmithed ? ForgeMath.CalculateDurabilityYield(baseUnits, 1.0, currentLoss) : baseUnits;
 
                 string status = (isSmithed && isMeltable) ? "PASS" : "FAIL";
-                sb.AppendLine($"[{status}] {coll.Code.Path} | Smithed: {isSmithed}, Meltable: {isMeltable} | Base: {baseUnits}u -> Expected Yield (pristine): {expectedYield}u");
+                sb.AppendLine($"[{status}] {coll.Code.Path} | Smithed: {isSmithed}, Meltable: {isMeltable} | Base: {baseUnits}u | Expected Yield (pristine): {expectedYield}u");
             }
 
             string message = sb.ToString();
