@@ -15,6 +15,9 @@ namespace HoardersForge
         private ICoreAPI api;
         public static ICoreAPI InstanceApi;
 
+        public static HoardersForgeConfig CurrentConfig { get; set; } = new HoardersForgeConfig();
+        private static GuiDialogHoardersForgeConfig configGui;
+
         public override void Start(ICoreAPI api)
         {
             this.api = api;
@@ -33,7 +36,140 @@ namespace HoardersForge
                     api.Logger.Notification("[HoardersForge] Harmony patches already applied (instance count: {0}).", activeInstances);
                 }
             }
+
+            // Load Config
+            try
+            {
+                CurrentConfig = api.LoadModConfig<HoardersForgeConfig>("HoardersForgeConfig.json");
+            }
+            catch { CurrentConfig = null; }
+
+            if (CurrentConfig == null)
+            {
+                CurrentConfig = new HoardersForgeConfig();
+                api.StoreModConfig(CurrentConfig, "HoardersForgeConfig.json");
+            }
+
             RegisterTestCommand(api);
+        }
+
+        public override void StartServerSide(ICoreServerAPI api)
+        {
+            base.StartServerSide(api);
+
+            // Register network channel
+            api.Network.RegisterChannel("hoardersforgeconfig")
+                .RegisterMessageType<ConfigSyncPacket>()
+                .SetMessageHandler<ConfigSyncPacket>((player, packet) => OnServerReceiveConfigPacket(api, player, packet));
+
+            // Sync config on join
+            api.Event.PlayerJoin += (player) =>
+            {
+                var packet = new ConfigSyncPacket
+                {
+                    DebugLogging = CurrentConfig.DebugLogging,
+                    LossPercentage = CurrentConfig.LossPercentage
+                };
+                api.Network.GetChannel("hoardersforgeconfig").SendPacket(packet, player);
+            };
+
+            // Register /hoardersforge server command (as a base command)
+            api.ChatCommands.Create("hoardersforge")
+                .WithDescription("Commands for Hoarder's Forge mod")
+                .RequiresPrivilege(Privilege.controlserver);
+        }
+
+        public override void StartClientSide(Vintagestory.API.Client.ICoreClientAPI api)
+        {
+            base.StartClientSide(api);
+
+            // Register network channel
+            api.Network.RegisterChannel("hoardersforgeconfig")
+                .RegisterMessageType<ConfigSyncPacket>()
+                .SetMessageHandler<ConfigSyncPacket>(OnClientReceiveConfigPacket);
+
+            // Register hotkey Ctrl+H
+            api.Input.RegisterHotKey("hoardersforgeconfiggui", "Open Hoarder's Forge Config GUI", Vintagestory.API.Client.GlKeys.H, Vintagestory.API.Client.HotkeyType.CharacterControls, ctrlPressed: true);
+            api.Input.SetHotKeyHandler("hoardersforgeconfiggui", (keyEvent) =>
+            {
+                OpenConfigGui(api);
+                return true;
+            });
+
+            // Register client-side /hoardersforge gui command
+            api.ChatCommands.Create("hoardersforge")
+                .WithDescription("Commands for Hoarder's Forge mod")
+                .BeginSubCommand("gui")
+                    .WithDescription("Open the configuration GUI dialog")
+                    .HandleWith((args) =>
+                    {
+                        OpenConfigGui(api);
+                        return TextCommandResult.Success();
+                    })
+                .EndSubCommand();
+        }
+
+        private void OnClientReceiveConfigPacket(ConfigSyncPacket packet)
+        {
+            if (packet == null) return;
+            CurrentConfig.DebugLogging = packet.DebugLogging;
+            CurrentConfig.LossPercentage = packet.LossPercentage;
+            if (CurrentConfig.DebugLogging)
+            {
+                api.Logger.Notification("[HoardersForge] Configuration synced from server: Loss = {0}%, DebugLogs = {1}", CurrentConfig.LossPercentage, CurrentConfig.DebugLogging);
+            }
+        }
+
+        private void OnServerReceiveConfigPacket(ICoreServerAPI api, IServerPlayer player, ConfigSyncPacket packet)
+        {
+            if (packet == null || player == null) return;
+
+            // Check privileges
+            if (!player.HasPrivilege(Privilege.controlserver))
+            {
+                api.SendMessage(player, 0, "You do not have permission to modify Hoarder's Forge settings.", EnumChatType.CommandError);
+                return;
+            }
+
+            // Clamp values
+            double loss = packet.LossPercentage;
+            if (loss < 0.0) loss = 0.0;
+            if (loss > 100.0) loss = 100.0;
+
+            CurrentConfig.DebugLogging = packet.DebugLogging;
+            CurrentConfig.LossPercentage = loss;
+
+            // Save config
+            api.StoreModConfig(CurrentConfig, "HoardersForgeConfig.json");
+
+            if (CurrentConfig.DebugLogging)
+            {
+                api.Logger.Notification("[HoardersForge] Configuration updated by {0}: Loss = {1}%, DebugLogs = {2}", player.PlayerName, CurrentConfig.LossPercentage, CurrentConfig.DebugLogging);
+            }
+
+            // Broadcast new config to all clients
+            var syncPacket = new ConfigSyncPacket
+            {
+                DebugLogging = CurrentConfig.DebugLogging,
+                LossPercentage = CurrentConfig.LossPercentage
+            };
+            api.Network.GetChannel("hoardersforgeconfig").BroadcastPacket(syncPacket);
+        }
+
+        private void OpenConfigGui(Vintagestory.API.Client.ICoreClientAPI api)
+        {
+            if (configGui == null)
+            {
+                configGui = new GuiDialogHoardersForgeConfig(api, CurrentConfig);
+            }
+            if (configGui.IsOpened())
+            {
+                configGui.TryClose();
+            }
+            else
+            {
+                configGui.TryOpen();
+            }
         }
 
         private void RegisterTestCommand(ICoreAPI api)
@@ -406,7 +542,10 @@ namespace HoardersForge
                     modified = true;
                     double units = HoardersForgeMod.GetWorkItemUnits(stack);
                     totalUnits += units * stack.StackSize;
-                    HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: workitem {0} (size {1}) -> {2} units", path, stack.StackSize, units);
+                    if (HoardersForgeMod.CurrentConfig.DebugLogging)
+                    {
+                        HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: workitem {0} (size {1}) -> {2} units", path, stack.StackSize, units);
+                    }
                 }
                 else if (HoardersForgeMod.IsSmithedItem(stack.Collectible, path))
                 {
@@ -425,9 +564,13 @@ namespace HoardersForge
                         if (remainingDurability > maxDurability) remainingDurability = maxDurability;
                         durabilityRatio = (double)remainingDurability / maxDurability;
                     }
-                    double units = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio);
+                    double loss = HoardersForgeMod.CurrentConfig?.LossPercentage ?? 5.0;
+                    double units = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio, loss);
                     totalUnits += units * stack.StackSize;
-                    HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: tool/head {0} (size {1}) -> {2} units (durability: {3}/{4})", path, stack.StackSize, units, stack.Collectible.GetRemainingDurability(stack), maxDurability);
+                    if (HoardersForgeMod.CurrentConfig.DebugLogging)
+                    {
+                        HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: tool/head {0} (size {1}) -> {2} units (durability: {3}/{4})", path, stack.StackSize, units, stack.Collectible.GetRemainingDurability(stack), maxDurability);
+                    }
                 }
                 else
                 {
@@ -435,7 +578,10 @@ namespace HoardersForge
                     totalUnits += units;
                     if (units > 0)
                     {
-                        HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: vanilla smeltable {0} (size {1}) -> {2} units", path, stack.StackSize, units);
+                        if (HoardersForgeMod.CurrentConfig.DebugLogging)
+                        {
+                            HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: vanilla smeltable {0} (size {1}) -> {2} units", path, stack.StackSize, units);
+                        }
                     }
                 }
             }
@@ -444,7 +590,10 @@ namespace HoardersForge
             {
                 double oldSize = __result.stackSize;
                 __result.stackSize = totalUnits / 100.0;
-                HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: modified result from {0} to {1} (totalUnits: {2})", oldSize, __result.stackSize, totalUnits);
+                if (HoardersForgeMod.CurrentConfig.DebugLogging)
+                {
+                    HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: modified result from {0} to {1} (totalUnits: {2})", oldSize, __result.stackSize, totalUnits);
+                }
             }
         }
     }
@@ -477,7 +626,10 @@ namespace HoardersForge
                     isMeltable = true;
                     double workItemUnits = HoardersForgeMod.GetWorkItemUnits(stack);
                     units = workItemUnits * stack.StackSize;
-                    HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks processing: workitem {0} (size {1}) -> metal: {2}, units: {3}", path, stack.StackSize, matchedMetal, units);
+                    if (HoardersForgeMod.CurrentConfig.DebugLogging)
+                    {
+                        HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks processing: workitem {0} (size {1}) -> metal: {2}, units: {3}", path, stack.StackSize, matchedMetal, units);
+                    }
                 }
                 else if (HoardersForgeMod.IsSmithedItem(stack.Collectible, path))
                 {
@@ -493,9 +645,13 @@ namespace HoardersForge
                         if (remainingDurability > maxDurability) remainingDurability = maxDurability;
                         durabilityRatio = (double)remainingDurability / maxDurability;
                     }
-                    double stackUnits = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio);
+                    double loss = HoardersForgeMod.CurrentConfig?.LossPercentage ?? 5.0;
+                    double stackUnits = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio, loss);
                     units = stackUnits * stack.StackSize;
-                    HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks processing: tool/head {0} (size {1}) -> metal: {2}, units: {3} (durability: {4}/{5})", path, stack.StackSize, matchedMetal, units, stack.Collectible.GetRemainingDurability(stack), maxDurability);
+                    if (HoardersForgeMod.CurrentConfig.DebugLogging)
+                    {
+                        HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks processing: tool/head {0} (size {1}) -> metal: {2}, units: {3} (durability: {4}/{5})", path, stack.StackSize, matchedMetal, units, stack.Collectible.GetRemainingDurability(stack), maxDurability);
+                    }
                 }
                 else
                 {
@@ -504,7 +660,10 @@ namespace HoardersForge
                     {
                         isMeltable = true;
                         units = vanillaUnits;
-                        HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks processing: vanilla smeltable {0} (size {1}) -> metal: {2}, units: {3}", path, stack.StackSize, matchedMetal, units);
+                        if (HoardersForgeMod.CurrentConfig.DebugLogging)
+                        {
+                            HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks processing: vanilla smeltable {0} (size {1}) -> metal: {2}, units: {3}", path, stack.StackSize, matchedMetal, units);
+                        }
                     }
                 }
 
@@ -570,7 +729,10 @@ namespace HoardersForge
                         if (newStackSize < 0) newStackSize = 0;
 
                         stackSizeField.SetValue(matched, newStackSize);
-                        HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks modified: matched {0}. Original contribution: {1}, New contribution: {2} (dynamicUnits: {3}, total stack size in ingot units)", codePath, originalContribution, newStackSize, dynamicUnits);
+                        if (HoardersForgeMod.CurrentConfig.DebugLogging)
+                        {
+                            HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks modified: matched {0}. Original contribution: {1}, New contribution: {2} (dynamicUnits: {3}, total stack size in ingot units)", codePath, originalContribution, newStackSize, dynamicUnits);
+                        }
                     }
                 }
             }

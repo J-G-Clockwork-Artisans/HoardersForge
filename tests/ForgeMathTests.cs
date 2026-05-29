@@ -32,14 +32,17 @@ namespace HoardersForge.Tests
         }
 
         [Test]
-        [TestCase(100.0, 0.5, 50.0)]    // 50% of 100 = 50.0
-        [TestCase(55.0, 0.5, 25.0)]     // 50% of 55 = 27.5 -> 25.0 (rounds down to mult of 5)
-        [TestCase(100.0, 0.12, 10.0)]   // 12% of 100 = 12.0 -> 10.0
-        [TestCase(100.0, 1.5, 100.0)]   // Clamped durability ratio > 1.0 -> 100.0
-        [TestCase(100.0, -0.2, 0.0)]    // Clamped durability ratio < 0.0 -> 0.0
-        public void CalculateDurabilityYield(double baseUnits, double durabilityRatio, double expectedYield)
+        [TestCase(100.0, 0.5, 0.0, 50.0)]    // 50% of 100 with 0% loss = 50.0
+        [TestCase(100.0, 0.5, 5.0, 45.0)]    // 50% of 100 with 5% loss = 47.5 -> 45.0
+        [TestCase(55.0, 0.5, 5.0, 25.0)]     // 50% of 55 = 27.5, with 5% loss = 26.125 -> 25.0
+        [TestCase(100.0, 0.12, 5.0, 10.0)]   // 12% of 100 = 12.0, with 5% loss = 11.4 -> 10.0
+        [TestCase(100.0, 1.5, 5.0, 95.0)]    // Clamped durability ratio > 1.0 -> 100.0, with 5% loss = 95.0
+        [TestCase(100.0, -0.2, 5.0, 0.0)]    // Clamped durability ratio < 0.0 -> 0.0
+        [TestCase(5.0, 1.0, 5.0, 5.0)]       // Pristine arrowhead (5.0): lossy = 4.75 -> rounded = 0. But orig >= 5.0 -> returns 5.0
+        [TestCase(5.0, 0.8, 5.0, 0.0)]       // Damaged arrowhead (4.0): lossy = 3.8 -> rounded = 0. Orig < 5.0 -> returns 0.0 (prevents material creation)
+        public void CalculateDurabilityYield(double baseUnits, double durabilityRatio, double lossPercentage, double expectedYield)
         {
-            double result = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio);
+            double result = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio, lossPercentage);
             Assert.That(result, Is.EqualTo(expectedYield));
         }
 

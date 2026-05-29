@@ -28,11 +28,20 @@ namespace HoardersForge
             }
         }
 
-        public static double CalculateDurabilityYield(double baseUnits, double durabilityRatio)
+        public static double CalculateDurabilityYield(double baseUnits, double durabilityRatio, double lossPercentage = 5.0)
         {
             if (durabilityRatio < 0.0) durabilityRatio = 0.0;
             if (durabilityRatio > 1.0) durabilityRatio = 1.0;
-            return Math.Floor((baseUnits * durabilityRatio) / 5.0) * 5.0;
+
+            double originalValue = baseUnits * durabilityRatio;
+            double lossyValue = originalValue * (1.0 - lossPercentage / 100.0);
+            double roundedValue = Math.Floor(lossyValue / 5.0) * 5.0;
+
+            if (roundedValue < 5.0)
+            {
+                return (5.0 <= originalValue) ? 5.0 : 0.0;
+            }
+            return roundedValue;
         }
 
         public static string GetRecipePath(string path)
