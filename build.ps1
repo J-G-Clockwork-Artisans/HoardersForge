@@ -6,7 +6,13 @@ $ErrorActionPreference = "Stop"
 # Paths
 $ModDir = $PSScriptRoot
 $ReleaseDir = Join-Path $ModDir "release"
-$ModZipName = "hoardersforge_v1.0.0.zip"
+
+# Read version from modinfo.json
+$ModInfoPath = Join-Path $ModDir "resources\modinfo.json"
+$ModInfo = Get-Content -Raw -Path $ModInfoPath | ConvertFrom-Json
+$ModVersion = $ModInfo.version
+
+$ModZipName = "hoardersforge_v$($ModVersion).zip"
 $ModZipPath = Join-Path $ReleaseDir $ModZipName
 
 $GameModsDir = Join-Path $env:APPDATA "VintagestoryData\Mods"

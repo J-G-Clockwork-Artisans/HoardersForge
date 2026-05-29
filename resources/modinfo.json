@@ -5,7 +5,7 @@
   "name": "Hoarder's Forge",
   "authors": ["JimmyJTC"],
   "description": "Recycle your old tools, broken toolheads, arrowheads, and leftover metal scraps back in the crucible! Declutter your chests and recover exactly what they are worth.",
-  "version": "1.0.0",
+  "version": "1.0.0-rc.1",
   "side": "Universal",
   "requiredOnClient": true,
   "requiredOnServer": true,
