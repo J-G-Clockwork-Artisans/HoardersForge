@@ -66,7 +66,7 @@ namespace HoardersForge
                         var coll = api.World.GetItem(assetLoc) as CollectibleObject ?? api.World.GetBlock(assetLoc) as CollectibleObject;
                         if (coll == null)
                         {
-                            sb.AppendLine($"[SKIP] {code} - Não encontrado no registro do jogo");
+                            sb.AppendLine($"[SKIP] {code} - Não encontrado");
                             continue;
                         }
 
@@ -77,20 +77,11 @@ namespace HoardersForge
                         double baseUnits = GetFinishedToolBaseUnits(coll.Code.Path);
 
                         string status = (isSmithed && isMeltable) ? "PASS" : "FAIL";
-                        sb.AppendLine($"[{status}] {coll.Code.Path}");
-                        sb.AppendLine($"   -> Smithed: {isSmithed}, Meltable: {isMeltable}");
-                        sb.AppendLine($"   -> Yield (pristine): {baseUnits} units");
+                        sb.AppendLine($"[{status}] {coll.Code.Path} | Smithed: {isSmithed}, Meltable: {isMeltable} | Yield (pristine): {baseUnits}u");
                     }
 
                     string message = sb.ToString();
-                    if (args.Caller?.Player is IServerPlayer serverPlayer)
-                    {
-                        (api as ICoreServerAPI)?.SendMessage(serverPlayer, 0, message, EnumChatType.CommandSuccess);
-                    }
-                    else
-                    {
-                        api.Logger.Notification(message);
-                    }
+                    api.Logger.Notification("[HoardersForge] Test results:\n" + message);
                     return TextCommandResult.Success(message);
                 });
         }
@@ -241,6 +232,7 @@ namespace HoardersForge
 
         public static int GetRecipeVoxelCount(string itemCodePath, string metal)
         {
+            itemCodePath = ForgeMath.GetRecipePath(itemCodePath);
             if (dynamicVoxelCache.TryGetValue(itemCodePath, out int cachedCount))
             {
                 return cachedCount;

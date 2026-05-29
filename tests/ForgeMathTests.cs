@@ -42,5 +42,30 @@ namespace HoardersForge.Tests
             double result = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio);
             Assert.That(result, Is.EqualTo(expectedYield));
         }
+
+        [Test]
+        [TestCase("pickaxe-copper", "pickaxehead-copper")]
+        [TestCase("axe-tinbronze", "axehead-tinbronze")]
+        [TestCase("knife-copper", "knifeblade-copper")]
+        [TestCase("sword-blackbronze", "swordblade-blackbronze")]
+        [TestCase("chutesection-copper", "chutesection-copper")]
+        [TestCase("game:pickaxe-copper", "game:pickaxehead-copper")]
+        [TestCase("game:chutesection-copper", "game:chutesection-copper")]
+        [TestCase("workitem-copper", "workitem-copper")]
+        [TestCase("pickaxehead-copper", "pickaxehead-copper")]
+        [TestCase("blade-falx-copper", "bladehead-falx-copper")]
+        [TestCase("game:blade-falx-copper", "game:bladehead-falx-copper")]
+        public void GetRecipePath_TranslatesCorrectly(string path, string expectedPath)
+        {
+            string result = ForgeMath.GetRecipePath(path);
+            Assert.That(result, Is.EqualTo(expectedPath));
+        }
+
+        [Test]
+        public void GetRecipePath_HandlesNullAndEmpty()
+        {
+            Assert.That(ForgeMath.GetRecipePath(""), Is.EqualTo(""));
+            Assert.That(ForgeMath.GetRecipePath(null), Is.Null);
+        }
     }
 }
