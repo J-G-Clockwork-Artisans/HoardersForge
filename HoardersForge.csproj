@@ -8,24 +8,27 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="VintagestoryAPI">
-      <HintPath>F:\Jean\Project\VintageMaster\Vintagestory\VintagestoryAPI.dll</HintPath>
+      <HintPath>..\Vintagestory\VintagestoryAPI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="VintagestoryLib">
-      <HintPath>F:\Jean\Project\VintageMaster\Vintagestory\VintagestoryLib.dll</HintPath>
+      <HintPath>..\Vintagestory\VintagestoryLib.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Vintagestory">
-      <HintPath>F:\Jean\Project\VintageMaster\Vintagestory\Vintagestory.dll</HintPath>
+      <HintPath>..\Vintagestory\Vintagestory.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="VSSurvivalMod">
-      <HintPath>F:\Jean\Project\VintageMaster\Vintagestory\Mods\VSSurvivalMod.dll</HintPath>
+      <HintPath>..\Vintagestory\Mods\VSSurvivalMod.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>F:\Jean\Project\VintageMaster\Vintagestory\Lib\0Harmony.dll</HintPath>
+      <HintPath>..\Vintagestory\Lib\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="tests\**" />
   </ItemGroup>
 </Project>

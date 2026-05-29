@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using Vintagestory.API.Common;
+using Vintagestory.API.Server;
 using Vintagestory.GameContent;
 
 namespace HoardersForge
@@ -32,6 +33,55 @@ namespace HoardersForge
                     api.Logger.Notification("[HoardersForge] Harmony patches already applied (instance count: {0}).", activeInstances);
                 }
             }
+            RegisterTestCommand(api);
+        }
+
+        private void RegisterTestCommand(ICoreAPI api)
+        {
+            api.ChatCommands.Create("hoardersforgetest")
+                .WithDescription("Executa testes de integração para o Hoarder's Forge")
+                .RequiresPrivilege(Privilege.controlserver)
+                .HandleWith((args) =>
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine("=== Hoarder's Forge - Testes de Integração ===");
+
+                    bool hasSmithingPlus = api.ModLoader.IsModEnabled("smithingplus");
+                    sb.AppendLine($"SmithingPlus Ativo: {hasSmithingPlus}");
+
+                    string[] testItems = {
+                        "game:pickaxe-copper",
+                        "game:chutesection-copper",
+                        "game:metalnailsandstrips-copper",
+                        "game:padlock-tinbronze",
+                        "game:arrowhead-copper",
+                        "game:plate-copper"
+                    };
+
+                    foreach (var code in testItems)
+                    {
+                        var assetLoc = new AssetLocation(code);
+                        var coll = api.World.GetItem(assetLoc) as CollectibleObject ?? api.World.GetBlock(assetLoc) as CollectibleObject;
+                        if (coll == null)
+                        {
+                            sb.AppendLine($"[SKIP] {code} - Não encontrado no registro do jogo");
+                            continue;
+                        }
+
+                        bool isSmithed = IsSmithedItem(coll, coll.Code.Path);
+                        var props = coll.GetCombustibleProperties(null, null, null);
+                        bool isMeltable = props != null && props.SmeltedStack != null;
+
+                        double baseUnits = GetFinishedToolBaseUnits(coll.Code.Path);
+
+                        string status = (isSmithed && isMeltable) ? "PASS" : "FAIL";
+                        sb.AppendLine($"[{status}] {coll.Code.Path}");
+                        sb.AppendLine($"   -> Smithed: {isSmithed}, Meltable: {isMeltable}");
+                        sb.AppendLine($"   -> Yield (pristine): {baseUnits} units");
+                    }
+
+                    return TextCommandResult.Success(sb.ToString());
+                });
         }
 
         public override void AssetsFinalize(ICoreAPI api)
@@ -149,22 +199,7 @@ namespace HoardersForge
             if (voxelCount == 0) return 0.0;
 
             bool hasSmithingPlus = InstanceApi?.ModLoader?.IsModEnabled("smithingplus") ?? false;
-            if (hasSmithingPlus)
-            {
-                double rawUnits = voxelCount * (100.0 / 42.0);
-                return Math.Floor(rawUnits / 5.0) * 5.0;
-            }
-            else
-            {
-                if (voxelCount <= 42)
-                {
-                    return 100.0;
-                }
-                else
-                {
-                    return 200.0;
-                }
-            }
+            return ForgeMath.CalculateBaseUnits(voxelCount, hasSmithingPlus);
         }
 
         private static Dictionary<string, int> dynamicVoxelCache = new Dictionary<string, int>();
@@ -271,29 +306,9 @@ namespace HoardersForge
                 voxelCount = GetRecipeVoxelCount(path, metal);
             }
 
-            if (hasSmithingPlus)
+            if (voxelCount > 0)
             {
-                if (voxelCount > 0)
-                {
-                    double rawUnits = voxelCount * (100.0 / 42.0);
-                    double units = Math.Floor(rawUnits / 5.0) * 5.0;
-                    if (units < 5.0 && rawUnits > 0) units = 5.0; // Enforce minimum of 5 units for valid smithed items
-                    return units;
-                }
-            }
-            else
-            {
-                if (voxelCount > 0)
-                {
-                    if (voxelCount <= 42)
-                    {
-                        return 100.0;
-                    }
-                    else
-                    {
-                        return 200.0;
-                    }
-                }
+                return ForgeMath.CalculateBaseUnits(voxelCount, hasSmithingPlus);
             }
 
             // Default Vanilla behavior (or fallback if recipe not found)
@@ -407,7 +422,7 @@ namespace HoardersForge
                         if (remainingDurability > maxDurability) remainingDurability = maxDurability;
                         durabilityRatio = (double)remainingDurability / maxDurability;
                     }
-                    double units = Math.Floor((baseUnits * durabilityRatio) / 5.0) * 5.0;
+                    double units = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio);
                     totalUnits += units * stack.StackSize;
                     HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] GetSingleSmeltableStack: tool/head {0} (size {1}) -> {2} units (durability: {3}/{4})", path, stack.StackSize, units, stack.Collectible.GetRemainingDurability(stack), maxDurability);
                 }
@@ -475,7 +490,7 @@ namespace HoardersForge
                         if (remainingDurability > maxDurability) remainingDurability = maxDurability;
                         durabilityRatio = (double)remainingDurability / maxDurability;
                     }
-                    double stackUnits = Math.Floor((baseUnits * durabilityRatio) / 5.0) * 5.0;
+                    double stackUnits = ForgeMath.CalculateDurabilityYield(baseUnits, durabilityRatio);
                     units = stackUnits * stack.StackSize;
                     HoardersForgeMod.InstanceApi?.Logger.Notification("[HoardersForge] mergeAndCompareStacks processing: tool/head {0} (size {1}) -> metal: {2}, units: {3} (durability: {4}/{5})", path, stack.StackSize, matchedMetal, units, stack.Collectible.GetRemainingDurability(stack), maxDurability);
                 }

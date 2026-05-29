@@ -14,7 +14,15 @@ $CentralReleasesDir = Join-Path $ModDir "..\releases"
 
 Write-Output "=== Starting packaging for HoardersForge ==="
 
-# 1. Compile C# DLL
+# 1. Run unit tests
+Write-Output "Running unit tests..."
+dotnet test "$ModDir\tests\HoardersForge.Tests.csproj" -c Release
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Unit tests failed! Aborting build."
+    exit 1
+}
+
+# 2. Compile C# DLL
 Write-Output "Compiling C# project..."
 dotnet build "$ModDir\HoardersForge.csproj" -c Release
 
